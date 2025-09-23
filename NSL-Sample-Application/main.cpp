@@ -23,25 +23,7 @@
 
 #ifdef _WINDOWS
 
-#define _WINSOCK_DEPRECATED_NO_WARNINGS
-#include <Winsock2.h>
-#include <WS2tcpip.h>
-
 #include "videoSource.h"
-
-#pragma comment(lib, "Ws2_32.lib")
-
-
-
-struct WINSOCK2_INITIALIZE {
-	WINSOCK2_INITIALIZE()
-	{
-		WSADATA wsaData;
-		WSAStartup(MAKEWORD(2, 2), &wsaData);
-	}
-	~WINSOCK2_INITIALIZE() { WSACleanup(); }
-};
-
 int signal_recieved = 0;
 
 #else // linux
@@ -68,9 +50,7 @@ int main(int argc, char** argv)
 {
 	CaptureOptions camOpt;
 
-#ifdef _WINDOWS 
-	WINSOCK2_INITIALIZE _startup;
-#else
+#ifndef _WINDOWS 
 	if( signal(SIGINT, sig_handler) == SIG_ERR )
 		printf("can't catch SIGINT\n");
 #endif
