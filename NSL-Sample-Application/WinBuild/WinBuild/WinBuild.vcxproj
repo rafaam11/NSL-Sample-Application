@@ -21,10 +21,14 @@
   <ItemGroup>
     <ClCompile Include="..\..\main.cpp" />
     <ClCompile Include="..\..\videoSource.cpp" />
+    <ClCompile Include="..\..\framePipeline.cpp" />
+    <ClCompile Include="..\..\colorLut.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\nsl_lib\include\nanolib.h" />
     <ClInclude Include="..\..\videoSource.h" />
+    <ClInclude Include="..\..\framePipeline.h" />
+    <ClInclude Include="..\..\colorLut.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
