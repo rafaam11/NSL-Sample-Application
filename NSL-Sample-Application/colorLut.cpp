@@ -18,6 +18,16 @@ static inline cv::Vec3b toVec3b(const NslVec3b& c)
 // ---------------------------------------------------------------------------
 void ColorLut::rebuild(int maxDistance, bool grayscale)
 {
+    // I-3: Invalidate tables immediately so a failed/skipped rebuild is never
+    //      mistaken for valid state by concurrent or subsequent callers.
+    maxDistance_ = 0;
+    distTable_.clear();
+    ampTable_.clear();
+
+    // I-2: Guard against nonsensical maxDistance values before touching nanolib.
+    if (maxDistance <= 0 || maxDistance > MAX_DISTANCE_12MHZ)
+        return;
+
     // Inform nanolib of the active color range and mode
     nsl_setColorRange(maxDistance,
                       MAX_GRAYSCALE_VALUE,
@@ -34,6 +44,7 @@ void ColorLut::rebuild(int maxDistance, bool grayscale)
     for (int i = 0; i <= MAX_GRAYSCALE_VALUE; ++i)
         ampTable_[i] = toVec3b(nsl_getAmplitudeColor(i));
 
+    // I-3: Only commit maxDistance_ after both tables are fully built.
     maxDistance_ = maxDistance;
 }
 
@@ -46,16 +57,20 @@ void ColorLut::applyDistance(const int* src, cv::Mat& dst,
     if (distTable_.empty())
         return;
 
-    cv::parallel_for_(cv::Range(0, h), [&](const cv::Range& range)
+    // I-1: dst must cover the full (roiY+h) x (roiX+w) region
+    assert(dst.rows >= roiY + h && dst.cols >= roiX + w);
+
+    cv::parallel_for_(cv::Range(0, h), [this, src, &dst, roiX, roiY, w](const cv::Range& range)
     {
         for (int y = range.start; y < range.end; ++y)
         {
+            cv::Vec3b* rowPtr = dst.ptr<cv::Vec3b>(roiY + y);
             for (int x = 0; x < w; ++x)
             {
                 const int val = src[(roiY + y) * NSL_LIDAR_TYPE_B_WIDTH + (roiX + x)];
                 if (val < 0 || val > maxDistance_)
                     continue;   // leave pixel at its initialized (255,255,255)
-                dst.at<cv::Vec3b>(roiY + y, roiX + x) = distTable_[val];
+                rowPtr[roiX + x] = distTable_[val];
             }
         }
     });
@@ -70,16 +85,20 @@ void ColorLut::applyAmplitude(const int* src, cv::Mat& dst,
     if (ampTable_.empty())
         return;
 
-    cv::parallel_for_(cv::Range(0, h), [&](const cv::Range& range)
+    // I-1: dst must cover the full (roiY+h) x (roiX+w) region
+    assert(dst.rows >= roiY + h && dst.cols >= roiX + w);
+
+    cv::parallel_for_(cv::Range(0, h), [this, src, &dst, roiX, roiY, w](const cv::Range& range)
     {
         for (int y = range.start; y < range.end; ++y)
         {
+            cv::Vec3b* rowPtr = dst.ptr<cv::Vec3b>(roiY + y);
             for (int x = 0; x < w; ++x)
             {
                 const int val = src[(roiY + y) * NSL_LIDAR_TYPE_B_WIDTH + (roiX + x)];
                 if (val < 0 || val > MAX_GRAYSCALE_VALUE)
                     continue;   // leave pixel at its initialized (255,255,255)
-                dst.at<cv::Vec3b>(roiY + y, roiX + x) = ampTable_[val];
+                rowPtr[roiX + x] = ampTable_[val];
             }
         }
     });
