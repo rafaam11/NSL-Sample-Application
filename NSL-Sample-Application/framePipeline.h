@@ -37,16 +37,20 @@ public:
     // Non-copyable, non-movable (owns a mutex)
     LatestWinsSlot(const LatestWinsSlot&)            = delete;
     LatestWinsSlot& operator=(const LatestWinsSlot&) = delete;
+    LatestWinsSlot(LatestWinsSlot&&)                 = delete;
+    LatestWinsSlot& operator=(LatestWinsSlot&&)      = delete;
 
     // -----------------------------------------------------------------------
     // put() — producer side, never blocks.
     // Overwrites any previously un-consumed value (old value is freed).
+    // Calling put() after stop() is allowed: the frame will still be
+    // consumed once by a take() that drains pending data before returning
+    // nullptr.
     // -----------------------------------------------------------------------
     void put(std::unique_ptr<T> val) {
         {
             std::lock_guard<std::mutex> lk(mtx_);
-            slot_     = std::move(val);
-            has_data_ = true;
+            slot_ = std::move(val);
         }
         cv_.notify_one();
     }
@@ -57,28 +61,32 @@ public:
     // -----------------------------------------------------------------------
     std::unique_ptr<T> take() {
         std::unique_lock<std::mutex> lk(mtx_);
-        cv_.wait(lk, [this] { return has_data_ || stopped_; });
+        cv_.wait(lk, [this] { return static_cast<bool>(slot_) || stopped_; });
 
-        if (stopped_ && !has_data_) {
+        if (stopped_ && !slot_) {
             return nullptr;
         }
 
-        std::unique_ptr<T> val = std::move(slot_);
-        has_data_ = false;
-        return val;
+        return std::move(slot_);
     }
 
     // -----------------------------------------------------------------------
     // tryTake() — non-blocking attempt.  Returns nullptr if no data is ready.
+    // Note: a nullptr return does not distinguish "slot empty" from "stopped".
+    // Call isStopped() afterward to tell them apart when it matters.
     // -----------------------------------------------------------------------
     std::unique_ptr<T> tryTake() {
         std::lock_guard<std::mutex> lk(mtx_);
-        if (!has_data_) {
-            return nullptr;
-        }
-        std::unique_ptr<T> val = std::move(slot_);
-        has_data_ = false;
-        return val;
+        return std::move(slot_);
+    }
+
+    // -----------------------------------------------------------------------
+    // isStopped() — returns true once stop() has been called.
+    // Use together with tryTake() to distinguish "empty" from "stopped".
+    // -----------------------------------------------------------------------
+    bool isStopped() const {
+        std::lock_guard<std::mutex> lk(mtx_);
+        return stopped_;
     }
 
     // -----------------------------------------------------------------------
@@ -93,11 +101,10 @@ public:
     }
 
 private:
-    std::mutex              mtx_;
+    mutable std::mutex      mtx_;
     std::condition_variable cv_;
     std::unique_ptr<T>      slot_;
-    bool                    has_data_ = false;
-    bool                    stopped_  = false;
+    bool                    stopped_ = false;
 };
 
 // ---------------------------------------------------------------------------
@@ -119,10 +126,14 @@ public:
     // Non-copyable, non-movable
     PipelineRunner(const PipelineRunner&)            = delete;
     PipelineRunner& operator=(const PipelineRunner&) = delete;
+    PipelineRunner(PipelineRunner&&)                 = delete;
+    PipelineRunner& operator=(PipelineRunner&&)      = delete;
 
     // -----------------------------------------------------------------------
     // start() — launch worker threads.  Pass nullptr (or empty function) for
     // any stage that should be skipped.
+    // Calling start() a second time without an intervening stopAndJoin() is
+    // safe: threads that are already running are silently skipped.
     // -----------------------------------------------------------------------
     void start(std::function<void()> captureFn,
                std::function<void()> transformFn,
@@ -131,6 +142,10 @@ public:
     // -----------------------------------------------------------------------
     // stopAndJoin() — join all threads that are still joinable.
     // Safe to call multiple times (idempotent after first call).
+    //
+    // PRECONDITION: stop() must have been called on every LatestWinsSlot<T>
+    // that a worker thread is blocked on.  Calling this without first
+    // unblocking all take() callers will deadlock.
     // -----------------------------------------------------------------------
     void stopAndJoin();
 

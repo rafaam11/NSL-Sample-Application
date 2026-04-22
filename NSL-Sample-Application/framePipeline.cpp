@@ -28,7 +28,7 @@ void PipelineRunner::stopAndJoin()
 
 void PipelineRunner::startThread(std::thread& t, std::function<void()> fn)
 {
-    if (fn) {
+    if (fn && !t.joinable()) {
         t = std::thread(std::move(fn));
     }
 }
