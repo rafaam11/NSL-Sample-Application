@@ -119,7 +119,11 @@ public:
 	videoSource();
 	~videoSource();
 	void setLidarOption(void *pCapOpt);
+	// Capture-only stage: calls nsl_getPointCloudData into pcdData member.
+	// NOT thread-safe with transformPcd() — must not be called concurrently.
 	bool capturePcd(int timeoutMs);
+	// Transform-only stage: converts pcdData to color Mats using the LUT.
+	// NOT thread-safe with capturePcd() — Task 4 will refactor this to accept NslPCD by value.
 	void transformPcd(CaptureOptions *pAppCfg);
 	bool captureLidar( int timeout, CaptureOptions *pAppCfg );
 	int prockey(CaptureOptions *appCfg);

@@ -639,14 +639,11 @@ void videoSource::setLidarOption(void *pCapOption)
 		nsl_setGrayscaleillumination(handle, FUNCTION_OPTIONS::FUNC_OFF);
 	}
 
-	nsl_setColorRange(pCapOpt->maxDistance, MAX_GRAYSCALE_VALUE, NslOption::FUNCTION_OPTIONS::FUNC_ON);
 	nsl_streamingOn(handle, static_cast<OPERATION_MODE_OPTIONS>(pCapOpt->captureType));
 
-	{
-		bool grayscale = (pCapOpt->captureType == (int)OPERATION_MODE_OPTIONS::DISTANCE_GRAYSCALE_MODE ||
-		                  pCapOpt->captureType == (int)OPERATION_MODE_OPTIONS::GRAYSCALE_MODE);
-		lut_.rebuild(pCapOpt->maxDistance, grayscale);
-	}
+	bool grayscale = (pCapOpt->captureType == (int)OPERATION_MODE_OPTIONS::DISTANCE_GRAYSCALE_MODE ||
+	                  pCapOpt->captureType == (int)OPERATION_MODE_OPTIONS::GRAYSCALE_MODE);
+	lut_.rebuild(pCapOpt->maxDistance, grayscale);
 }
 
 
@@ -682,7 +679,6 @@ int videoSource::prockey(CaptureOptions *appCfg)
 		case 'd':
 		case 'D':
 			//graysca & distance mode
-			nsl_setColorRange(appCfg->maxDistance, MAX_GRAYSCALE_VALUE, NslOption::FUNCTION_OPTIONS::FUNC_OFF);
 			if( appCfg->captureType != (int)OPERATION_MODE_OPTIONS::DISTANCE_GRAYSCALE_MODE ){
 				appCfg->captureType = (int)OPERATION_MODE_OPTIONS::DISTANCE_GRAYSCALE_MODE;
 				nsl_streamingOn(handle, static_cast<OPERATION_MODE_OPTIONS>(appCfg->captureType));
@@ -704,6 +700,7 @@ int videoSource::prockey(CaptureOptions *appCfg)
 		case 'E':
 			// amplitude(Gray) & distance mode
 			nsl_setColorRange(appCfg->maxDistance, MAX_GRAYSCALE_VALUE, NslOption::FUNCTION_OPTIONS::FUNC_ON);
+			lut_.rebuild(appCfg->maxDistance, true);
 			break;
 		case 't':
 		case 'T':
