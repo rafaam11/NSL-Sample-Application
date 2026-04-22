@@ -60,15 +60,21 @@ void ColorLut::rebuild(int maxDistance, bool grayscale)
 void ColorLut::applyDistance(const int* src, cv::Mat& dst,
                               int roiX, int roiY, int w, int h)
 {
-    std::lock_guard<std::mutex> lock(lutMtx_);
-
-    if (distTable_.empty())
-        return;
+    // Snapshot the table under the lock; parallel_for_ runs lock-free.
+    std::vector<cv::Vec3b> table;
+    int maxDist;
+    {
+        std::lock_guard<std::mutex> lock(lutMtx_);
+        if (distTable_.empty())
+            return;
+        table   = distTable_;   // shallow copy (~37 KB for 12500 entries)
+        maxDist = maxDistance_;
+    }
 
     // I-1: dst must cover the full (roiY+h) x (roiX+w) region
     assert(dst.rows >= roiY + h && dst.cols >= roiX + w);
 
-    cv::parallel_for_(cv::Range(0, h), [this, src, &dst, roiX, roiY, w](const cv::Range& range)
+    cv::parallel_for_(cv::Range(0, h), [src, &dst, roiX, roiY, w, maxDist, &table](const cv::Range& range)
     {
         for (int y = range.start; y < range.end; ++y)
         {
@@ -76,9 +82,9 @@ void ColorLut::applyDistance(const int* src, cv::Mat& dst,
             for (int x = 0; x < w; ++x)
             {
                 const int val = src[(roiY + y) * NSL_LIDAR_TYPE_B_WIDTH + (roiX + x)];
-                if (val < 0 || val > maxDistance_)
+                if (val < 0 || val > maxDist)
                     continue;   // leave pixel at its initialized (255,255,255)
-                rowPtr[roiX + x] = distTable_[val];
+                rowPtr[roiX + x] = table[static_cast<size_t>(val)];
             }
         }
     });
@@ -90,15 +96,19 @@ void ColorLut::applyDistance(const int* src, cv::Mat& dst,
 void ColorLut::applyAmplitude(const int* src, cv::Mat& dst,
                                int roiX, int roiY, int w, int h)
 {
-    std::lock_guard<std::mutex> lock(lutMtx_);
-
-    if (ampTable_.empty())
-        return;
+    // Snapshot the table under the lock; parallel_for_ runs lock-free.
+    std::vector<cv::Vec3b> table;
+    {
+        std::lock_guard<std::mutex> lock(lutMtx_);
+        if (ampTable_.empty())
+            return;
+        table = ampTable_;   // ~3 KB for 2897 entries
+    }
 
     // I-1: dst must cover the full (roiY+h) x (roiX+w) region
     assert(dst.rows >= roiY + h && dst.cols >= roiX + w);
 
-    cv::parallel_for_(cv::Range(0, h), [this, src, &dst, roiX, roiY, w](const cv::Range& range)
+    cv::parallel_for_(cv::Range(0, h), [src, &dst, roiX, roiY, w, &table](const cv::Range& range)
     {
         for (int y = range.start; y < range.end; ++y)
         {
@@ -108,7 +118,7 @@ void ColorLut::applyAmplitude(const int* src, cv::Mat& dst,
                 const int val = src[(roiY + y) * NSL_LIDAR_TYPE_B_WIDTH + (roiX + x)];
                 if (val < 0 || val > MAX_GRAYSCALE_VALUE)
                     continue;   // leave pixel at its initialized (255,255,255)
-                rowPtr[roiX + x] = ampTable_[val];
+                rowPtr[roiX + x] = table[static_cast<size_t>(val)];
             }
         }
     });
