@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <!--
+    SDK root paths.
+    Override any of these by setting a matching environment variable or VS user macro
+    before building. Example: set PclDir=D:\SDKs\PCL1.12
+  -->
+  <PropertyGroup Label="UserMacros">
+    <OpenCvDir Condition="'$(OpenCvDir)' == ''">C:\local\OpenCv454</OpenCvDir>
+    <PclDir Condition="'$(PclDir)' == ''">C:\Program Files\PCL 1.12.0</PclDir>
+    <OpenNI2Dir Condition="'$(OpenNI2Dir)' == ''">C:\Program Files\OpenNI2</OpenNI2Dir>
+    <NslLibSharedDir>$(ProjectDir)..\..\nsl_lib\lib\windows\shared</NslLibSharedDir>
+  </PropertyGroup>
+
+  <!--
+    Copy all runtime DLL dependencies next to WinBuild.exe after a Release|x64 build.
+    Result: the x64\Release\ folder can be zipped and run on a PC without any SDK installed.
+
+    Not copied (statically linked or header-only):
+      FLANN (flann_cpp_s.lib + FLANN_STATIC define), Qhull (qhullstatic.lib),
+      Boost 1.76 (libboost_* static libs), Eigen (headers only)
+    Not copied (sensor driver enumeration disabled via DISABLE_OPENNI preprocessor):
+      OpenNI2\Drivers\
+  -->
+  <Target Name="CopyRuntimeDlls" AfterTargets="Build"
+          Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
+    <ItemGroup>
+      <!-- nsl_lib: in-repo, always present -->
+      <RuntimeDll Include="$(NslLibSharedDir)\nanolib.dll" />
+      <RuntimeDll Include="$(NslLibSharedDir)\libusb-1.0.dll" />
+
+      <!-- OpenCV 4.5.4: world DLL + optional video-I/O plugins (ffmpeg, msmf) -->
+      <RuntimeDll Include="$(OpenCvDir)\x64\vc16\bin\opencv_*454*.dll" />
+
+      <!-- PCL 1.12 (19 modules) -->
+      <RuntimeDll Include="$(PclDir)\bin\pcl_*.dll" />
+
+      <!-- VTK 9.0 bundled with PCL (~90 DLLs) -->
+      <RuntimeDll Include="$(PclDir)\3rdParty\VTK\bin\vtk*-9.0.dll" />
+
+      <!-- OpenNI2: OpenNI2.lib is linked even though DISABLE_OPENNI is defined,
+           so the DLL loader still tries to resolve it at startup -->
+      <RuntimeDll Include="$(OpenNI2Dir)\Redist\OpenNI2.dll" />
+
+      <!-- MSVC VC143 CRT: vcruntime140*.dll, msvcp140*.dll, concrt140.dll -->
+      <RuntimeDll Include="$(VCToolsRedistDir)x64\Microsoft.VC143.CRT\*.dll"
+                  Condition="'$(VCToolsRedistDir)' != '' and Exists('$(VCToolsRedistDir)x64\Microsoft.VC143.CRT')" />
+
+      <!-- MSVC OpenMP runtime: vcomp140.dll (may be required by PCL/VTK) -->
+      <RuntimeDll Include="$(VCToolsRedistDir)x64\Microsoft.VC143.OpenMP\*.dll"
+                  Condition="'$(VCToolsRedistDir)' != '' and Exists('$(VCToolsRedistDir)x64\Microsoft.VC143.OpenMP')" />
+    </ItemGroup>
+
+    <Message Importance="high" Text="[CopyRuntimeDlls] %(RuntimeDll.Filename)%(RuntimeDll.Extension) -> $(OutDir)" />
+    <Copy SourceFiles="@(RuntimeDll)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+
+    <!-- Verify the three critical DLL groups actually landed -->
+    <Error Condition="!Exists('$(OutDir)nanolib.dll')"
+           Text="nanolib.dll not found after copy. Check NslLibSharedDir=$(NslLibSharedDir)" />
+    <Error Condition="!Exists('$(OutDir)opencv_world454.dll')"
+           Text="opencv_world454.dll not found after copy. Check OpenCvDir=$(OpenCvDir)\x64\vc16\bin" />
+    <Error Condition="!Exists('$(OutDir)pcl_common.dll')"
+           Text="pcl_common.dll not found after copy. Check PclDir=$(PclDir)\bin" />
+  </Target>
+
+</Project>

@@ -70,11 +70,12 @@ typedef struct CaptureOptions_{
 	float curConfidence;
 
 
-	// display & running parameter	
+	// display & running parameter
 	int	fpsCount;
 	int displayFps;
-	int maxDistance;	
-	
+	int maxDistance;
+	int headless;
+
 	NslConfig	nslDevConfig;
 }CaptureOptions;
 

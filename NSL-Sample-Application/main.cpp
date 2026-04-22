@@ -24,7 +24,18 @@
 #ifdef _WINDOWS
 
 #include "videoSource.h"
+#include <windows.h>
 int signal_recieved = 0;
+
+BOOL WINAPI ctrl_handler(DWORD ctrlType)
+{
+	if (ctrlType == CTRL_C_EVENT || ctrlType == CTRL_BREAK_EVENT) {
+		printf("received Ctrl+C\n");
+		signal_recieved = 1;
+		return TRUE;
+	}
+	return FALSE;
+}
 
 #else // linux
 #include <stdio.h>
@@ -50,24 +61,40 @@ int main(int argc, char** argv)
 {
 	CaptureOptions camOpt;
 
-#ifndef _WINDOWS 
-	if( signal(SIGINT, sig_handler) == SIG_ERR )
+#ifdef _WINDOWS
+	SetConsoleCtrlHandler(ctrl_handler, TRUE);
+#else
+	if (signal(SIGINT, sig_handler) == SIG_ERR)
 		printf("can't catch SIGINT\n");
 #endif
 
 	videoSource* lidarSrc = createApp(argc, argv, &camOpt);
 
 #ifdef SUPPORT_DEEPLEARNING
-	lidarSrc->initDeepLearning(&camOpt);
+	if (!camOpt.headless)
+		lidarSrc->initDeepLearning(&camOpt);
 #endif
 
 	lidarSrc->setLidarOption(&camOpt);
+
+	int headlessFrames = 0;
+	std::chrono::steady_clock::time_point headlessTime = std::chrono::steady_clock::now();
 
 	while ( !signal_recieved )
 	{
 		if (!lidarSrc->captureLidar(3000, &camOpt)) {
 			printf("capture : failed...\n");
 			break;
+		}
+
+		if (camOpt.headless) {
+			headlessFrames++;
+			auto now = std::chrono::steady_clock::now();
+			if (std::chrono::duration_cast<std::chrono::seconds>(now - headlessTime).count() >= 5) {
+				printf("[headless] alive, frames=%d\n", headlessFrames);
+				headlessTime = now;
+			}
+			continue;
 		}
 
 #ifdef SUPPORT_DEEPLEARNING

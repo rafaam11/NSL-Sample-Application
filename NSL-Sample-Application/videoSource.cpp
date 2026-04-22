@@ -79,6 +79,7 @@ void print_help()
 	printf("-temporalThresHold : 0=disable, 1~1000\n");
 	printf("-interferenceEnable : 0=disable, 1=enable\n");
 	printf("-interferenceLimit : 0=disable, 1~1000\n");
+	printf("-headless : run without GUI window, streaming only (Ctrl+C to stop)\n");
 }
 
 /*
@@ -129,11 +130,14 @@ videoSource* createApp(int argc, char **argv, CaptureOptions *pAppCfg)
 
 	
 	videoSource *vidSrc = new videoSource();
-	
-	cv::namedWindow(WIN_NAME, cv::WINDOW_NORMAL);
-	cv::setWindowProperty(WIN_NAME, cv::WND_PROP_FULLSCREEN, cv::WINDOW_FULLSCREEN);	
-	cv::setMouseCallback(WIN_NAME, callback_mouse_click, vidSrc);
-		
+
+	pAppCfg->headless = vidSrc->find_arg(argc, argv, (char*)"-headless");
+
+	if (!pAppCfg->headless) {
+		cv::namedWindow(WIN_NAME, cv::WINDOW_NORMAL);
+		cv::setWindowProperty(WIN_NAME, cv::WND_PROP_FULLSCREEN, cv::WINDOW_FULLSCREEN);
+		cv::setMouseCallback(WIN_NAME, callback_mouse_click, vidSrc);
+	}
 
 	const char *ipAddr = vidSrc->find_char_arg(argc, argv, "ipaddr", "192.168.0.220");
 //	const char *ipAddr = vidSrc->find_char_arg(argc, argv, "ipaddr", "/dev/ttyLidar");
