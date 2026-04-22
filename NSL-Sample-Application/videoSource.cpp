@@ -573,42 +573,42 @@ void videoSource::setMatrixColor(Mat image, int x, int y, NslVec3b color)
 	image.at<Vec3b>(y,x)[2] = color.r;
 }
 
-bool videoSource::captureLidar( int timeout, CaptureOptions *pAppCfg )
+bool videoSource::capturePcd(int timeoutMs)
 {
 	frameTime = std::chrono::steady_clock::now();
-	bool ret = false;
-	
-	if( nsl_getPointCloudData(handle, &pcdData, timeout) == NSL_ERROR_TYPE::NSL_SUCCESS )
-	{
-		ret = true;
-
-		if( pcdData.includeLidar )
-		{
-			int width = pcdData.width;
-			int height = pcdData.height;
-			int xMin = pcdData.roiXMin;
-			int yMin = pcdData.roiYMin;
-			int lidarWidth = NSL_LIDAR_TYPE_A_WIDTH;
-			int lidarHeight = NSL_LIDAR_TYPE_A_HEIGHT;
-		
-			Mat distanceMat = Mat(lidarHeight, lidarWidth, CV_8UC3, Scalar(255,255,255));
-			Mat amplitudeMat = Mat(lidarHeight, lidarWidth, CV_8UC3, Scalar(255,255,255));
-		
-			for(int y = 0, index = 0; y < height; y++)
-			{
-				for(int x = 0; x < width; x++, index++)
-				{
-					setMatrixColor(distanceMat, x+xMin, y+yMin, nsl_getDistanceColor(pcdData.distance2D[y+yMin][x+xMin]));
-					setMatrixColor(amplitudeMat, x+xMin, y+yMin, nsl_getAmplitudeColor(pcdData.amplitude[y+yMin][x+xMin]));
-				}
-			}
-					
-			cv::resize( distanceMat, pAppCfg->distMat, cv::Size( 640, 480 ) );
-			cv::resize( amplitudeMat, pAppCfg->frameMat, cv::Size( 640, 480 ));
-		}
+	if (nsl_getPointCloudData(handle, &pcdData, timeoutMs) == NSL_ERROR_TYPE::NSL_SUCCESS) {
+		return true;
 	}
+	return false;
+}
 
-	return ret;
+void videoSource::transformPcd(CaptureOptions *pAppCfg)
+{
+	if (!pcdData.includeLidar) return;
+	if (!lut_.isBuilt()) return;
+
+	int width  = pcdData.width;
+	int height = pcdData.height;
+	int xMin   = pcdData.roiXMin;
+	int yMin   = pcdData.roiYMin;
+
+	distanceMat_.create(NSL_LIDAR_TYPE_A_HEIGHT, NSL_LIDAR_TYPE_A_WIDTH, CV_8UC3);
+	amplitudeMat_.create(NSL_LIDAR_TYPE_A_HEIGHT, NSL_LIDAR_TYPE_A_WIDTH, CV_8UC3);
+	distanceMat_.setTo(cv::Scalar(255, 255, 255));
+	amplitudeMat_.setTo(cv::Scalar(255, 255, 255));
+
+	lut_.applyDistance(&pcdData.distance2D[0][0], distanceMat_, xMin, yMin, width, height);
+	lut_.applyAmplitude(&pcdData.amplitude[0][0], amplitudeMat_, xMin, yMin, width, height);
+
+	cv::resize(distanceMat_, pAppCfg->distMat,  cv::Size(640, 480));
+	cv::resize(amplitudeMat_, pAppCfg->frameMat, cv::Size(640, 480));
+}
+
+bool videoSource::captureLidar( int timeout, CaptureOptions *pAppCfg )
+{
+	if (!capturePcd(timeout)) return false;
+	transformPcd(pAppCfg);
+	return true;
 }
 
 
@@ -641,6 +641,12 @@ void videoSource::setLidarOption(void *pCapOption)
 
 	nsl_setColorRange(pCapOpt->maxDistance, MAX_GRAYSCALE_VALUE, NslOption::FUNCTION_OPTIONS::FUNC_ON);
 	nsl_streamingOn(handle, static_cast<OPERATION_MODE_OPTIONS>(pCapOpt->captureType));
+
+	{
+		bool grayscale = (pCapOpt->captureType == (int)OPERATION_MODE_OPTIONS::DISTANCE_GRAYSCALE_MODE ||
+		                  pCapOpt->captureType == (int)OPERATION_MODE_OPTIONS::GRAYSCALE_MODE);
+		lut_.rebuild(pCapOpt->maxDistance, grayscale);
+	}
 }
 
 
@@ -659,7 +665,7 @@ int videoSource::prockey(CaptureOptions *appCfg)
 				appCfg->captureType = (int)OPERATION_MODE_OPTIONS::GRAYSCALE_MODE;
 				nsl_streamingOn(handle, static_cast<OPERATION_MODE_OPTIONS>(appCfg->captureType));
 			}
-			
+			lut_.rebuild(appCfg->maxDistance, true);
 			break;
 		case '0':
 			// HDR Off
@@ -681,6 +687,7 @@ int videoSource::prockey(CaptureOptions *appCfg)
 				appCfg->captureType = (int)OPERATION_MODE_OPTIONS::DISTANCE_GRAYSCALE_MODE;
 				nsl_streamingOn(handle, static_cast<OPERATION_MODE_OPTIONS>(appCfg->captureType));
 			}
+			lut_.rebuild(appCfg->maxDistance, true);
 			break;
 		case 'a':
 		case 'A':
@@ -691,6 +698,7 @@ int videoSource::prockey(CaptureOptions *appCfg)
 				appCfg->captureType = (int)OPERATION_MODE_OPTIONS::DISTANCE_AMPLITUDE_MODE;
 				nsl_streamingOn(handle, static_cast<OPERATION_MODE_OPTIONS>(appCfg->captureType));
 			}
+			lut_.rebuild(appCfg->maxDistance, false);
 			break;
 		case 'e':
 		case 'E':

@@ -37,6 +37,7 @@
 #include <chrono>
 
 #include "nanolib.h"
+#include "colorLut.h"
 
 #define SUPPORT_DEEPLEARNING
 
@@ -100,6 +101,10 @@ private:
 #endif
 	NslPCD pcdData;
 
+	ColorLut lut_;
+	cv::Mat distanceMat_;
+	cv::Mat amplitudeMat_;
+
 
 public:
 	void getMouseEvent( int *mouse_xpos, int *mouse_ypos );
@@ -114,6 +119,8 @@ public:
 	videoSource();
 	~videoSource();
 	void setLidarOption(void *pCapOpt);
+	bool capturePcd(int timeoutMs);
+	void transformPcd(CaptureOptions *pAppCfg);
 	bool captureLidar( int timeout, CaptureOptions *pAppCfg );
 	int prockey(CaptureOptions *appCfg);
 	void stopLidar();
