@@ -45,7 +45,11 @@ void ColorLut::rebuild(int maxDistance, bool grayscale)
         ampTable_[i] = toVec3b(nsl_getAmplitudeColor(i));
 
     // I-3: Only commit maxDistance_ after both tables are fully built.
-    maxDistance_ = maxDistance;
+    if (static_cast<int>(distTable_.size()) == maxDistance + 1 &&
+        static_cast<int>(ampTable_.size()) == MAX_GRAYSCALE_VALUE + 1)
+    {
+        maxDistance_ = maxDistance;
+    }
 }
 
 // ---------------------------------------------------------------------------

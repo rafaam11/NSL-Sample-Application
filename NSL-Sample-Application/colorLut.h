@@ -20,7 +20,8 @@ public:
     // Build both lookup tables.
     // maxDistance : configured max distance in mm (1 .. MAX_DISTANCE_12MHZ)
     // grayscale   : true when captureType == GRAYSCALE_MODE or DISTANCE_GRAYSCALE_MODE
-    // Out-of-range maxDistance values are silently ignored (tables remain unchanged).
+    // Out-of-range maxDistance values cause both tables to be cleared.
+    // Call isBuilt() to verify successful construction before use.
     void rebuild(int maxDistance, bool grayscale);
 
     // Fill a CV_8UC3 Mat using the distance table.
