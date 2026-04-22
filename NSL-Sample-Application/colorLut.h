@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <mutex>
 #include <vector>
 #include <opencv2/opencv.hpp>
 
@@ -43,9 +44,13 @@ public:
                         int roiX, int roiY, int w, int h);
 
     // Returns true if tables have been successfully built by rebuild().
-    bool isBuilt() const { return !distTable_.empty(); }
+    bool isBuilt() const {
+        std::lock_guard<std::mutex> lock(lutMtx_);
+        return !distTable_.empty();
+    }
 
 private:
+    mutable std::mutex      lutMtx_;
     std::vector<cv::Vec3b> distTable_;   // size = maxDistance_ + 1
     std::vector<cv::Vec3b> ampTable_;    // size = MAX_GRAYSCALE_VALUE + 1
     int maxDistance_ = 0;

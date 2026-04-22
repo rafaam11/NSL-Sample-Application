@@ -122,15 +122,26 @@ public:
 	// Capture-only stage: calls nsl_getPointCloudData into pcdData member.
 	// NOT thread-safe with transformPcd() — must not be called concurrently.
 	bool capturePcd(int timeoutMs);
+	// Get the last captured pcdData (call right after capturePcd() returns true).
+	const NslPCD& getPcdData() const { return pcdData; }
+	// Overwrite the internal pcdData member (used by display thread before drawCaption).
+	void setPcdData(NslPCD pcd) { pcdData = std::move(pcd); }
 	// Transform-only stage: converts pcdData to color Mats using the LUT.
-	// NOT thread-safe with capturePcd() — Task 4 will refactor this to accept NslPCD by value.
+	// NOT thread-safe with capturePcd() — must not be called concurrently.
 	void transformPcd(CaptureOptions *pAppCfg);
+	// Transform an externally-supplied NslPCD into color Mats.
+	// Thread-safe: uses lut_ with internal mutex protection.
+	void transformFromPcd(const NslPCD& pcd,
+	                      cv::Mat& outFrameMat, cv::Mat& outDistMat);
 	bool captureLidar( int timeout, CaptureOptions *pAppCfg );
 	int prockey(CaptureOptions *appCfg);
 	void stopLidar();
 	void drawCaption(cv::Mat grayMat, cv::Mat distMat, CaptureOptions *appCfg);
 	void initDeepLearning( CaptureOptions *pAppCfg );
 	void deepLearning( cv::Mat imageLidar );
+	// Returns true if initDeepLearning() successfully loaded the DNN model.
+	bool isDnnReady() const;
+
 
 	///////////////////// virtual interface ////////////////////////////////////////////////////////////////
 	/**

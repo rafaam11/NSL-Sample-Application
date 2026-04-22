@@ -18,6 +18,8 @@ static inline cv::Vec3b toVec3b(const NslVec3b& c)
 // ---------------------------------------------------------------------------
 void ColorLut::rebuild(int maxDistance, bool grayscale)
 {
+    std::lock_guard<std::mutex> lock(lutMtx_);
+
     // I-3: Invalidate tables immediately so a failed/skipped rebuild is never
     //      mistaken for valid state by concurrent or subsequent callers.
     maxDistance_ = 0;
@@ -58,6 +60,8 @@ void ColorLut::rebuild(int maxDistance, bool grayscale)
 void ColorLut::applyDistance(const int* src, cv::Mat& dst,
                               int roiX, int roiY, int w, int h)
 {
+    std::lock_guard<std::mutex> lock(lutMtx_);
+
     if (distTable_.empty())
         return;
 
@@ -86,6 +90,8 @@ void ColorLut::applyDistance(const int* src, cv::Mat& dst,
 void ColorLut::applyAmplitude(const int* src, cv::Mat& dst,
                                int roiX, int roiY, int w, int h)
 {
+    std::lock_guard<std::mutex> lock(lutMtx_);
+
     if (ampTable_.empty())
         return;
 

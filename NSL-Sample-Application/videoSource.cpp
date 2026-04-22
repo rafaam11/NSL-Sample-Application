@@ -604,6 +604,39 @@ void videoSource::transformPcd(CaptureOptions *pAppCfg)
 	cv::resize(amplitudeMat_, pAppCfg->frameMat, cv::Size(640, 480));
 }
 
+void videoSource::transformFromPcd(const NslPCD& pcd,
+                                   cv::Mat& outFrameMat, cv::Mat& outDistMat)
+{
+	if (!pcd.includeLidar) return;
+	if (!lut_.isBuilt()) return;
+
+	int width  = pcd.width;
+	int height = pcd.height;
+	int xMin   = pcd.roiXMin;
+	int yMin   = pcd.roiYMin;
+
+	cv::Mat localDist, localAmpl;
+	localDist.create(NSL_LIDAR_TYPE_A_HEIGHT, NSL_LIDAR_TYPE_A_WIDTH, CV_8UC3);
+	localAmpl.create(NSL_LIDAR_TYPE_A_HEIGHT, NSL_LIDAR_TYPE_A_WIDTH, CV_8UC3);
+	localDist.setTo(cv::Scalar(255, 255, 255));
+	localAmpl.setTo(cv::Scalar(255, 255, 255));
+
+	lut_.applyDistance(&pcd.distance2D[0][0], localDist, xMin, yMin, width, height);
+	lut_.applyAmplitude(&pcd.amplitude[0][0], localAmpl, xMin, yMin, width, height);
+
+	cv::resize(localDist, outDistMat,  cv::Size(640, 480));
+	cv::resize(localAmpl, outFrameMat, cv::Size(640, 480));
+}
+
+bool videoSource::isDnnReady() const
+{
+#ifdef SUPPORT_DEEPLEARNING
+	return !dnnNet.empty();
+#else
+	return false;
+#endif
+}
+
 bool videoSource::captureLidar( int timeout, CaptureOptions *pAppCfg )
 {
 	if (!capturePcd(timeout)) return false;

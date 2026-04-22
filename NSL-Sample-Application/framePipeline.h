@@ -48,11 +48,14 @@ public:
     // nullptr.
     // -----------------------------------------------------------------------
     void put(std::unique_ptr<T> val) {
+        std::unique_ptr<T> old;    // will be destroyed OUTSIDE the lock
         {
             std::lock_guard<std::mutex> lk(mtx_);
-            slot_ = std::move(val);
+            old = std::move(slot_); // take ownership of old value
+            slot_ = std::move(val); // install new value
         }
         cv_.notify_one();
+        // `old` destroyed here, outside the lock
     }
 
     // -----------------------------------------------------------------------
